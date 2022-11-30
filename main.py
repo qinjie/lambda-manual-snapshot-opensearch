@@ -6,20 +6,12 @@ from opensearch_utils import register_repository, list_all_repositories, list_sn
     get_latest_snapshot, list_indices
 
 # # Settings
-# host_source = '<DOMAIN_ENDPOINT_WITH_HTTPS>'  # 源头域终端节点
-# host_target = '<DOMAIN_ENDPOINT_WITH_HTTPS>'  # 目标域终端节点
-# bucket_name = '<BUCKET_NAME>'  # S3桶名
-# region = '<AWS_REGION>'  # S3桶的区域
-# role_arn = '<ARN_OF_IAM_ROLE_LAMBDA>'  # Lambda函数的角色ARN
-# repo_name = '<REPOSITORY_NAME>'  # 自定义
-
-# Settings
-host_source = 'https://vpc-mydomain-su6vi7ww5kwtqkojjfd5uw3xly.ap-southeast-1.es.amazonaws.com'  # mydomain
-host_target = 'https://vpc-mydomain-2-wqolsf5ku4j5e3ubmpdkep4jxm.ap-southeast-1.es.amazonaws.com'  # mydomain-2
-bucket_name = 'elasticsearch-snapshots-460453255610'
-region = 'ap-southeast-1'
-role_arn = 'arn:aws:iam::460453255610:role/ElasticSearchSnapshotLambdaRole'
-repo_name = 'my-repo'
+host_source = '<DOMAIN_ENDPOINT_WITH_HTTPS>'  # 源头域终端节点
+host_target = '<DOMAIN_ENDPOINT_WITH_HTTPS>'  # 目标域终端节点
+bucket_name = '<BUCKET_NAME>'  # S3桶名
+region = '<AWS_REGION>'  # S3桶的区域
+role_arn = '<ARN_OF_IAM_ROLE_LAMBDA>'  # Lambda函数的角色ARN
+repo_name = '<REPOSITORY_NAME>'  # 自定义
 
 # Get region and credential
 service = 'es'
