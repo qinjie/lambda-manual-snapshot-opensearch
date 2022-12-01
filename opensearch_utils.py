@@ -119,8 +119,8 @@ def restore_snapshot(host: str, awsauth: AWS4Auth, repo_name: str, snapshot_name
     url = host + path
 
     payload = {
-        # "indices": "*,-.kibana*",  # All indices except indices matching .kibana*
-        "indices": "*,-.kibana*",  # All indices
+        "indices": "*,-.kibana*",  # All indices except indices matching .kibana*
+        # "indices": "*",  # All indices
         "include_global_state": True,
         "ignore_unavailable": True
     }
@@ -203,6 +203,6 @@ def list_indices(host: str, awsauth: AWS4Auth):
     url = host + path
     headers = {"Content-Type": "application/json"}
     r = requests.get(url, auth=awsauth, headers=headers)
-    print(f"Indices: {r.text}")
+    print(f"Host: {host}, Indices: {r.text}")
 
     return r.json()
