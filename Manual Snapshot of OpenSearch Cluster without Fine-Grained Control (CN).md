@@ -58,6 +58,7 @@
 2. 创建一个 IAM 策略 <u>`elasticsearch-snapshot-policy`</u>。这个策略将被附加到一个 IAM 角色，例如`ElasticSearchSnapshotLambdaRole`, 以便让lambda函数使用OpenSearch服务。
 
    * 相应地替换 ACCOUNT_ID、IAM_ROLE_NAME、BUCKET_NAME。
+   * 桶名BUKET_NAME可以用*符来匹配多个S3桶。
 
    ```json
    {
@@ -80,7 +81,7 @@
                    "s3:ListBucket"
                ],
                "Resource": [
-                   "arn:aws:s3:::BUCKET_NAME"
+                   "arn:aws:s3:::BUCKET_NAME_*"
                ]
            },
            {
@@ -91,7 +92,9 @@
                    "s3:GetObject",
                    "s3:DeleteObject"
                ],
-               "Resource": "arn:aws:s3:::BUCKET_NAME/*"
+               "Resource": [
+                 "arn:aws:s3:::BUCKET_NAME_*/*"
+               ]
            },
            {
                "Sid": "VisualEditor3",
@@ -144,19 +147,19 @@
 
 5. 上传以下Python脚本。
 
-   * main.py
+   * lambda_function.py
    * opensearch_utils.py
 
 6. 修改 `main.py` 文档内的 <DOMAIN_ENDPOINT_WITH_HTTPS>、<BUCKET_NAME>、<AWS_REGION>、<ARN_OF_IAM_ROLE_LAMBDA> 和 <REPOSITORY_NAME>。
 
+   * 你可以添加多个源域。每个源域可以有自定义的REPOSITORY_NAME，以及自己的S3桶。
+
    ```python
    # Settings
-   host_source = '<DOMAIN_ENDPOINT_WITH_HTTPS>'  # 源头域终端节点
-   host_target = '<DOMAIN_ENDPOINT_WITH_HTTPS>'  # 目标域终端节点
-   bucket_name = '<BUCKET_NAME>'  # S3桶名
+   host_sources = [('<DOMAIN_ENDPOINT_WITH_HTTPS>','<REPOSITORY_NAME>','<S3_BUCKET_NAME>')]  # 源头域终端节点
+   host_targets = [('<DOMAIN_ENDPOINT_WITH_HTTPS>','<REPOSITORY_NAME>','<S3_BUCKET_NAME>')]   # 目标域终端节点
    region = '<AWS_REGION>'  # S3桶的区域
    role_arn = '<ARN_OF_IAM_ROLE_LAMBDA>'  # Lambda函数的角色ARN
-   repo_name = '<REPOSITORY_NAME>'  # 自定义
    ```
 
 7. 这个函数需要用到以下的库。建一个包含以下库的压缩包。用这个压缩包建一个函数层，比如`requests_aws4auth`.
@@ -172,13 +175,16 @@
 
    <img src="./Manual%20Snapshot%20of%20OpenSearch%20Cluster%20without%20Fine-Grained%20Control%20(CN).assets/image-20221129162416745.png" alt="image-20221129162416745" style="zoom: 67%;" />
 
-7. 将函数的超时延长至30秒。
+9. 将函数的超时延长至30秒。
 
    <img src="./Manual%20Snapshot%20of%20OpenSearch%20Cluster%20without%20Fine-Grained%20Control%20(CN).assets/image-20221129163412821.png" alt="image-20221129163412821" style="zoom:80%;" />
 
-8. 点击Deploy，然后再点Test
+10. 点击Deploy，然后再点Test。
+
+   * 给事件一个名字，不需要修改事件JSON和其他设置。
 
    <img src="./Manual%20Snapshot%20of%20OpenSearch%20Cluster%20without%20Fine-Grained%20Control%20(CN).assets/image-20221129163234278.png" alt="image-20221129163234278" style="zoom:80%;" />
+
 
 
 
@@ -190,11 +196,27 @@
 
    ```python
    def lambda_handler(event, context):
-       register_a_repo(host_source)
-       register_a_repo(host_target)
+       # Registeration repo for source domains 源域
+       for host, repo, bucket in host_sources:
+           register_a_repo(host, repo, bucket)
+       # Register repo for target domains 目标域
+       for host, repo, bucket in host_targets:
+           register_a_repo(host, repo, bucket)
    
-       # take_a_snapshot()
-       # snapshot_name = restore_latest_snapshot()
+       # # Take snapshot of source domains 源域
+       # for host, repo, _ in host_sources:
+       #     take_a_snapshot(host, repo)
+       #
+       # # Restore last snapshot to target domains
+       # for host, repo, _ in host_sources:
+       #     snapshot_name = restore_latest_snapshot(host, repo)
+       #
+       # # List indices in source domains
+       # for host, _, _ in host_sources:
+       #     list_indices(host, awsauth)
+       # # List indices in target domain
+       # for host, _, _ in host_sources:
+       #     list_indices(host, awsauth)
    
        return {
            'statusCode': 200
@@ -209,11 +231,27 @@
 
    ```python
    def lambda_handler(event, context):
-       # register_a_repo(host_source)
-       # register_a_repo(host_target)
+       # # Registeration repo for source domains 源域
+       # for host, repo, bucket in host_sources:
+       #     register_a_repo(host, repo, bucket)
+       # # Register repo for target domains 目标域
+       # for host, repo, bucket in host_targets:
+       #     register_a_repo(host, repo, bucket)
    
-       take_a_snapshot()
-       # snapshot_name = restore_latest_snapshot()
+       # Take snapshot of source domains 源域
+       for host, repo, _ in host_sources:
+           take_a_snapshot(host, repo)
+   
+       # # Restore last snapshot to target domains
+       # for host, repo, _ in host_sources:
+       #     snapshot_name = restore_latest_snapshot(host, repo)
+       #
+       # # List indices in source domains
+       # for host, _, _ in host_sources:
+       #     list_indices(host, awsauth)
+       # # List indices in target domain
+       # for host, _, _ in host_sources:
+       #     list_indices(host, awsauth)
    
        return {
            'statusCode': 200
@@ -230,11 +268,27 @@
 
    ```python
    def lambda_handler(event, context):
-       # register_a_repo(host_source)
-       # register_a_repo(host_target)
+       # # Registeration repo for source domains 源域
+       # for host, repo, bucket in host_sources:
+       #     register_a_repo(host, repo, bucket)
+       # # Register repo for target domains 目标域
+       # for host, repo, bucket in host_targets:
+       #     register_a_repo(host, repo, bucket)
    
-       # take_a_snapshot()
-       snapshot_name = restore_latest_snapshot()
+       # # Take snapshot of source domains 源域
+       # for host, repo, _ in host_sources:
+       #     take_a_snapshot(host, repo)
+   
+       # Restore last snapshot to target domains
+       for host, repo, _ in host_sources:
+           snapshot_name = restore_latest_snapshot(host, repo)
+   
+       # # List indices in source domains
+       # for host, _, _ in host_sources:
+       #     list_indices(host, awsauth)
+       # # List indices in target domain
+       # for host, _, _ in host_sources:
+       #     list_indices(host, awsauth)
    
        return {
            'statusCode': 200
@@ -247,16 +301,29 @@
 
 8. 修改 `lambda_handler()` 函数并部署。
 
-   ```
+   ```python
    def lambda_handler(event, context):
-       # register_a_repo(host_source)
-       # register_a_repo(host_target)
+       # # Registeration repo for source domains 源域
+       # for host, repo, bucket in host_sources:
+       #     register_a_repo(host, repo, bucket)
+       # # Register repo for target domains 目标域
+       # for host, repo, bucket in host_targets:
+       #     register_a_repo(host, repo, bucket)
    
-       # take_a_snapshot()
-       # snapshot_name = restore_latest_snapshot()
+       # # Take snapshot of source domains 源域
+       # for host, repo, _ in host_sources:
+       #     take_a_snapshot(host, repo)
    
-       list_indices(host_source, awsauth)
-       list_indices(host_target, awsauth)
+       # # Restore last snapshot to target domains
+       # for host, repo, _ in host_sources:
+       #     snapshot_name = restore_latest_snapshot(host, repo)
+   
+       # List indices in source domains
+       for host, _, _ in host_sources:
+           list_indices(host, awsauth)
+       # List indices in target domain
+       for host, _, _ in host_sources:
+           list_indices(host, awsauth)
    
        return {
            'statusCode': 200
