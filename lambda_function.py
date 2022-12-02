@@ -3,7 +3,7 @@ from requests_aws4auth import AWS4Auth
 
 from opensearch_utils import register_repository, list_all_repositories, list_snapshots_in_repo, get_snapshot_status, \
     take_snapshot, restore_snapshot, delete_one_repository, delete_one_snapshot, get_snapshot, close_index, \
-    get_latest_snapshot, list_indices
+    get_latest_snapshot, list_indices, list_snapshots_in_progress
 
 # # Settings
 # host_sources = [('<DOMAIN_ENDPOINT_WITH_HTTPS>','<REPOSITORY_NAME>','<S3_BUCKET_NAME>')]  # 源头域终端节点
@@ -73,10 +73,8 @@ def delete_a_repo(host: str, repo: str):
 def take_a_snapshot(host: str, repo: str):
     # Create a snapshot
     snapshot_name = take_snapshot(host, awsauth, repo)
-    print(snapshot_name)
-
-    # List all snapshots in all repository
-    list_snapshots_in_repo(host, repo, awsauth)
+    if snapshot_name is None:
+        return None
 
     # Get snapshot in-progress
     get_snapshot_status(host, awsauth, repo_name=repo, snapshot_name=snapshot_name)
@@ -92,6 +90,13 @@ def delete_latest_snapshot(host: str, repo: str):
 
 
 def restore_latest_snapshot(host: str, repo: str):
+    # Exit if there is snapshot in progress
+    snapshots_in_progress = list_snapshots_in_progress(host, repo=repo, awsauth=awsauth)
+    if snapshots_in_progress:
+        print(f'In-progress Snapshot: {snapshots_in_progress}')
+        print('Avoid restoring snapshot')
+        return None
+
     latest_snapshot = get_latest_snapshot(host, repo, awsauth)
     if latest_snapshot:
         snapshot_name = latest_snapshot.get('snapshot')

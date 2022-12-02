@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, List
 
 import requests
 from requests_aws4auth import AWS4Auth
@@ -73,6 +73,13 @@ def take_snapshot(host: str, awsauth: AWS4Auth, repo_name: str, snapshot_name: s
     Take a snapshot in a repo. If snapshot_name is omitted, it will use current datetime string as name.
     Return snapshot name.
     """
+    # Exit if there is snapshot in progress
+    snapshots_in_progress = list_snapshots_in_progress(host, repo=repo_name, awsauth=awsauth)
+    if snapshots_in_progress:
+        print(f'In-progress Snapshot: {snapshots_in_progress}')
+        print('Avoid running another snapshot')
+        return None
+
     if snapshot_name is None:
         # Use current datetime as snapshot name
         now = datetime.now()
@@ -119,8 +126,8 @@ def restore_snapshot(host: str, awsauth: AWS4Auth, repo_name: str, snapshot_name
     url = host + path
 
     payload = {
-        "indices": "*,-.kibana*",  # All indices except indices matching .kibana*
-        # "indices": "*",  # All indices
+        # "indices": "*,-.kibana*,-.opendistro_security",  # All indices except .kibana* and .opendistro_security
+        "indices": "*,-.opendistro_security",  # All indices except .opendistro_security
         "include_global_state": True,
         "ignore_unavailable": True
     }
@@ -180,19 +187,20 @@ def close_index(host: str, awsauth: AWS4Auth, index_name: str):
 
 def get_latest_snapshot(host: str, repo_name: str, awsauth: AWS4Auth) -> Dict:
     """
-    Get information of the latest snapshot.
+    Get information of the last successful snapshot.
     """
     # List all snapshots in all repository
     snapshots = list_snapshots_in_repo(host, repo_name, awsauth)
+    # Sort snapshots by start_time
+    sortedlist = sorted(snapshots, key=lambda d: d['start_time'])
 
-    # Get the snapshot with the latest start_time
-    if len(snapshots) > 0:
-        # Sort snapshots by start_time
-        sortedlist = sorted(snapshots, key=lambda d: d['start_time'])
-        print(f'Found latest snapshot in {repo_name}: {sortedlist[-1].get("snapshot")}')
-        return sortedlist[-1]
-    else:
-        print('No snapshot found.')
+    # Get the successful snapshot with the latest start_time
+    for snapshot in sortedlist[::-1]:
+        if snapshot.get("state") == "SUCCESS":
+            print(f'Found latest snapshot in {repo_name}: {snapshot.get("snapshot")}')
+            return snapshot
+
+    print('No snapshot (state=SUCCESS) found.')
 
 
 def list_indices(host: str, awsauth: AWS4Auth):
@@ -206,3 +214,17 @@ def list_indices(host: str, awsauth: AWS4Auth):
     print(f"Host: {host}, Indices: {r.text}")
 
     return r.json()
+
+
+def list_snapshots_in_progress(host: str, repo: str, awsauth: AWS4Auth) -> List:
+    """
+    List all indices including docs count in the domain.
+    """
+    path = f'/_snapshot/{repo}/_current'
+    url = host + path
+    headers = {"Content-Type": "application/json"}
+    r = requests.get(url, auth=awsauth, headers=headers)
+    print(f"Host: {host}, snapshots in-progress: {r.text}")
+
+    return r.json().get('snapshots', [])
+
