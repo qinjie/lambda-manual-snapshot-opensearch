@@ -2,8 +2,8 @@ import boto3
 from requests_aws4auth import AWS4Auth
 
 from opensearch_utils import register_repository, list_all_repositories, list_snapshots_in_repo, get_snapshot_status, \
-    take_snapshot, restore_snapshot, delete_one_repository, delete_one_snapshot, get_snapshot, close_index, \
-    get_latest_snapshot, list_indices, list_snapshots_in_progress
+    take_snapshot, restore_latest_snapshot, delete_one_repository, delete_one_snapshot, get_snapshot, close_index, \
+    get_latest_snapshot, list_indices, list_snapshots_in_progress, restore_one_snapshot
 
 # # Settings
 # host_sources = [('<DOMAIN_ENDPOINT_WITH_HTTPS>','<REPOSITORY_NAME>','<S3_BUCKET_NAME>')]  # 源头域终端节点
@@ -16,7 +16,7 @@ host_sources = [
     ('https://vpc-mydomain-su6vi7ww5kwtqkojjfd5uw3xly.ap-southeast-1.es.amazonaws.com', 'my-repo',
      'elasticsearch-snapshots-460453255610')]  # mydomain
 host_targets = [
-    ('https://vpc-mydomain-3-zasnw56lkop4p52zmr7roow7kq.ap-southeast-1.es.amazonaws.com', 'my-repo',
+    ('https://vpc-mydomain-2-wqolsf5ku4j5e3ubmpdkep4jxm.ap-southeast-1.es.amazonaws.com', 'my-repo',
      'elasticsearch-snapshots-460453255610')]  # mydomain-2
 region = 'ap-southeast-1'
 role_arn = 'arn:aws:iam::460453255610:role/ElasticSearchSnapshotLambdaRole'
@@ -30,21 +30,26 @@ awsauth = AWS4Auth(credentials.access_key, credentials.secret_key, session.regio
 
 
 def lambda_handler(event, context):
-    # Registeration repo for source domains 源域
-    for host, repo, bucket in host_sources:
-        register_a_repo(host, repo, bucket)
+    # Registration repo for source domains 源域
+    #for host, repo, bucket in host_sources:
+    #    register_a_repo(host, repo, bucket)
+
     # Register repo for target domains 目标域
-    for host, repo, bucket in host_targets:
-        register_a_repo(host, repo, bucket)
+    #for host, repo, bucket in host_targets:
+    #    register_a_repo(host, repo, bucket)
 
     # # Take snapshot of source domains 源域
-    # for host, repo, _ in host_sources:
-    #     take_a_snapshot(host, repo)
+    #for host, repo, _ in host_sources:
+    #    take_a_snapshot(host, repo)
     #
     # # Restore last snapshot to target domains
     # for host, repo, _ in host_targets:
-    #     snapshot_name = restore_latest_snapshot(host, repo)
-    #
+    #     restore_latest_snapshot(host, awsauth, repo)
+
+    # Restore a snapshot by name
+    for host, repo, _ in host_targets:
+        restore_one_snapshot(host, awsauth, repo, '20221207-030441')
+
     # # List indices in source domains
     # for host, _, _ in host_sources:
     #     list_indices(host, awsauth)
@@ -65,11 +70,6 @@ def register_a_repo(host: str, repo: str, bucket: str):
     list_all_repositories(host, awsauth)
 
 
-def delete_a_repo(host: str, repo: str):
-    # Delete a repository
-    delete_one_repository(host, awsauth, repo)
-
-
 def take_a_snapshot(host: str, repo: str):
     # Create a snapshot
     snapshot_name = take_snapshot(host, awsauth, repo)
@@ -82,37 +82,3 @@ def take_a_snapshot(host: str, repo: str):
     return snapshot_name
 
 
-def delete_latest_snapshot(host: str, repo: str):
-    latest_snapshot = get_latest_snapshot(host, repo, awsauth)
-    if latest_snapshot:
-        snapshot_name = latest_snapshot.get('snapshot')
-        delete_one_snapshot(host, awsauth, repo, snapshot_name=snapshot_name)
-
-
-def restore_latest_snapshot(host: str, repo: str):
-    # Exit if there is snapshot in progress
-    snapshots_in_progress = list_snapshots_in_progress(host, repo=repo, awsauth=awsauth)
-    if snapshots_in_progress:
-        print(f'In-progress Snapshot: {snapshots_in_progress}')
-        print('Avoid restoring snapshot')
-        return None
-
-    latest_snapshot = get_latest_snapshot(host, repo, awsauth)
-    if latest_snapshot:
-        snapshot_name = latest_snapshot.get('snapshot')
-        # Get indices of the snapshot
-        snapshot = get_snapshot(host, awsauth, repo, snapshot_name)
-        # Close all indices in the snapshot before restore
-        for index in snapshot['indices']:
-            try:
-                close_index(host, awsauth, index)
-            except Exception as ex:
-                print('[INFO] Index {index} not found in target domain.')
-
-        # Restore the snapshot
-        restore_snapshot(host, awsauth, repo, snapshot_name)
-
-        # Get snapshot in-progress
-        get_snapshot_status(host, awsauth, repo_name=repo, snapshot_name=snapshot_name)
-
-        return snapshot_name

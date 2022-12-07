@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Union
 
 import requests
 from requests_aws4auth import AWS4Auth
@@ -68,7 +68,7 @@ def register_repository(host: str, awsauth: AWS4Auth, repo_name: str, bucket_nam
     print(r.text)
 
 
-def take_snapshot(host: str, awsauth: AWS4Auth, repo_name: str, snapshot_name: str = None) -> str:
+def take_snapshot(host: str, awsauth: AWS4Auth, repo_name: str, snapshot_name: str = None) -> Union[str, None]:
     """
     Take a snapshot in a repo. If snapshot_name is omitted, it will use current datetime string as name.
     Return snapshot name.
@@ -118,6 +118,58 @@ def delete_one_repository(host: str, awsauth: AWS4Auth, repo_name: str):
     print(r.text)
 
 
+def restore_latest_snapshot(host: str, awsauth: AWS4Auth, repo_name: str) -> bool:
+    """
+    Restore the latest snapshot in a repo. Restore all indexes except system indexes.
+    """
+    snapshots_in_progress = list_snapshots_in_progress(host, repo=repo_name, awsauth=awsauth)
+    if snapshots_in_progress:
+        print(f'In-progress Snapshot: {snapshots_in_progress}')
+        print('Avoid restoring snapshot')
+        return False
+
+    # Get the latest snapshot
+    latest_snapshot = get_latest_snapshot(host, repo_name, awsauth)
+    if not latest_snapshot:
+        return False
+
+    snapshot_name = latest_snapshot.get('snapshot')
+
+    # Close indices appeared in snapshot
+    close_indices_in_snapshot(host, awsauth, repo_name, snapshot_name)
+
+    # Start restoring
+    restore_snapshot(host, awsauth, repo_name, snapshot_name)
+    return True
+
+
+def restore_one_snapshot(host: str, awsauth: AWS4Auth, repo_name: str, snapshot_name: str) -> bool:
+    """
+    Restore a snapshot in a repo. Restore all indexes except system indexes.
+    """
+    if not is_snapshot_successful(host, repo_name, snapshot_name, awsauth):
+        print('ERROR: Either snapshot not found or this snapshot not in SUCCESS state.')
+        return False
+
+    # Close indices appeared in snapshot
+    close_indices_in_snapshot(host, awsauth, repo_name, snapshot_name)
+
+    # Start restoring
+    restore_snapshot(host, awsauth, repo_name, snapshot_name)
+    return True
+
+
+def close_indices_in_snapshot(host: str, awsauth: AWS4Auth, repo_name: str, snapshot_name: str):
+    # Get indices of the snapshot
+    snapshot = get_snapshot(host, awsauth, repo_name, snapshot_name)
+    # Close all indices in the snapshot before restore
+    for index in snapshot['indices']:
+        try:
+            close_index(host, awsauth, index)
+        except Exception as ex:
+            print('[INFO] Index {index} not found in target domain.')
+
+
 def restore_snapshot(host: str, awsauth: AWS4Auth, repo_name: str, snapshot_name: str):
     """
     Restore snapshot (all indexes except Dashboards and fine-grained access control)
@@ -126,8 +178,8 @@ def restore_snapshot(host: str, awsauth: AWS4Auth, repo_name: str, snapshot_name
     url = host + path
 
     payload = {
-        # "indices": "*,-.kibana*,-.opendistro_security",  # All indices except .kibana* and .opendistro_security
-        "indices": "*,-.opendistro_security",  # All indices except .opendistro_security
+        "indices": "*,-.kibana*,-.opendistro_security",  # All indices except .kibana* and .opendistro_security
+        # "indices": "*,-.opendistro_security",  # All indices except .opendistro_security
         "include_global_state": True,
         "ignore_unavailable": True
     }
@@ -181,8 +233,7 @@ def close_index(host: str, awsauth: AWS4Auth, index_name: str):
     url = host + path
     headers = {"Content-Type": "application/json"}
     r = requests.post(url, auth=awsauth, json={}, headers=headers)
-    print(f"Closing an index: {index_name}")
-    print(r.text)
+    print(f"Closing an index {index_name}: {r.text}")
 
 
 def get_latest_snapshot(host: str, repo_name: str, awsauth: AWS4Auth) -> Dict:
@@ -228,3 +279,32 @@ def list_snapshots_in_progress(host: str, repo: str, awsauth: AWS4Auth) -> List:
 
     return r.json().get('snapshots', [])
 
+
+def is_snapshot_successful(host: str, repo: str, snapshot_name: str, awsauth: AWS4Auth) -> bool:
+    """
+    Check if a snapshot is successful.
+    """
+    path = f'/_snapshot/{repo}/{snapshot_name}/_status'
+    url = host + path
+    headers = {"Content-Type": "application/json"}
+    r = requests.get(url, auth=awsauth, headers=headers)
+    print(f"Host: {host}, snapshot: {snapshot_name}, status: {r.text}")
+
+    response = r.json()
+    snapshots = r.json().get('snapshots', [])
+    if not snapshots:
+        print(f'ERROR: Snapshot {snapshot_name} not found. {r.text}')
+        return False
+
+    snapshot = snapshots[0]
+    return snapshot.get('state') == 'SUCCESS'
+
+
+def delete_latest_snapshot(host: str, repo: str, awsauth: AWS4Auth):
+    """
+    Delete the latest snapshot from repo
+    """
+    latest_snapshot = get_latest_snapshot(host, repo, awsauth)
+    if latest_snapshot:
+        snapshot_name = latest_snapshot.get('snapshot')
+        delete_one_snapshot(host, awsauth, repo, snapshot_name=snapshot_name)
