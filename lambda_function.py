@@ -13,13 +13,11 @@ from opensearch_utils import register_repository, list_all_repositories, list_sn
 
 # Settings
 host_sources = [
-    ('https://vpc-myelastic-elo6xfgh2ccj663y4xhpwra26y.ap-southeast-1.es.amazonaws.com', 'my-repo',
-     'elasticsearch-snapshots-460453255610')
-]
+    ('https://vpc-myelastic-elo6xfgh2ccj663y4xhpwra26y.ap-southeast-1.es.amazonaws.com', 'my-repo', 'elasticsearch-snapshots-460453255610'),
+    ] 
 host_targets = [
-    ('https://vpc-mydomain-2-wqolsf5ku4j5e3ubmpdkep4jxm.ap-southeast-1.es.amazonaws.com', 'my-repo',
-     'elasticsearch-snapshots-460453255610')
-]
+    ('https://vpc-your-elastic-vekpqa3we5duud5ebuzoq7fbte.ap-southeast-1.es.amazonaws.com', 'my-repo', 'elasticsearch-snapshots-460453255610')
+    ]
 region = 'ap-southeast-1'
 role_arn = 'arn:aws:iam::460453255610:role/ElasticSearchSnapshotLambdaRole'
 
@@ -32,21 +30,21 @@ awsauth = AWS4Auth(credentials.access_key, credentials.secret_key, session.regio
 
 
 def lambda_handler(event, context):
-    # # Registration repo for source domains 源域
+    # Registration repo for source domains 源域
     # for host, repo, bucket in host_sources:
     #     register_a_repo(host, repo, bucket)
 
     # Register repo for target domains 目标域
     # for host, repo, bucket in host_targets:
-    #    register_a_repo(host, repo, bucket)
+    #     register_a_repo(host, repo, bucket)
 
     # Take snapshot of source domains 源域
-    for host, repo, _ in host_sources:
-        take_a_snapshot(host, repo)
-
+    # for host, repo, _ in host_sources:
+    #     take_a_snapshot(host, repo)
+    
     # # Restore last snapshot to target domains
-    # for host, repo, _ in host_targets:
-    #     restore_latest_snapshot(host, awsauth, repo)
+    for host, repo, _ in host_targets:
+        restore_latest_snapshot(host, awsauth, repo)
 
     # # Restore a snapshot by name
     # for host, repo, _ in host_targets:
